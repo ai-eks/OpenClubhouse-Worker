@@ -12,7 +12,8 @@ def test(worker: Worker = None):
     print("token_id:", worker.token_id)
     print("headers:", worker.chh.headers)
     print(len(worker.channels), "channels:", worker.channels)
-    print("queue len:", worker.queue._qsize())
+    print("Join queue len:", worker.join_queue._qsize())
+    print("Check queue len:", worker.check_queue._qsize())
     return worker
     # worker.getChannels()
     # print("token_id:", worker.token_id)

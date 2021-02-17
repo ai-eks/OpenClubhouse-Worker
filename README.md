@@ -1,6 +1,6 @@
-# Clubhouse-Worker
+# OpenClubhouse-Worker
 
-A simple worker for [OpenClubhouse](https://github.com/ai-eks/OpenClubhouse) to sync data.
+A simple worker for [OpenClubhouse](https://github.com/ai-eks/OpenClubhouse) to sync CH channel data.
 
 ## Run
 
@@ -20,12 +20,13 @@ A simple worker for [OpenClubhouse](https://github.com/ai-eks/OpenClubhouse) to 
 ## Reference
 
 - <https://github.com/zhuowei/ClubhouseAPI>
-  - Regex pattern: replace "(/(.+):\n    (post|get):\n)" with "$1      operationId: $2\n"
+  - Regex pattern for requests_openapi: replace "(/(.+):\n    (post|get):\n)" with "$1      operationId: $2\n"
 
 ## Todo
 
 - [x] large channel write
+  - reduce the number of saved users
 - [ ] update strategy
-  - [ ] token update
+  - [ ] token update (low priority)
   - [x] user count update
   - [x] channel status update

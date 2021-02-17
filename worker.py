@@ -29,7 +29,8 @@ class Worker():
         self.db = self.client.clubhouse
         self.chh = clubHouseHelper
         self.channels = set()
-        self.queue = queue.Queue()
+        self.check_queue = queue.Queue()
+        self.join_queue = queue.Queue()
         self.token_id = None
         self.token_file = token_file
         self.last_fresh_time = 0
@@ -119,8 +120,6 @@ class Worker():
                         self.updateChannelInfo2DB(channel)
                     else:
                         print(f"Skip a old Channel {channel_uid}")
-
-                self.pushGetChannels2Queue()
                 return True
             except Exception as e:
                 if 401 <= int(e.args[0]) <= 403:
@@ -196,7 +195,6 @@ class Worker():
 
     def getAllAliveChannelsFromDB(self):
         cursor = self.db.channels.find({"success": True})
-        self.pushGetChannels2Queue()
         for channel in cursor:
             self.addChannel2Set(channel)
             self.pushChannel2Queue(channel)
@@ -217,13 +215,10 @@ class Worker():
             }})
 
     def pushUnjoinedChannel2Queue(self, channel_uid: tuple):
-        self.queue.put((self.joinChannel, channel_uid))
+        self.join_queue.put(channel_uid)
 
     def pushJoinedChannel2Queue(self, channel_uid: tuple):
-        self.queue.put((self.checkChannelStatus, channel_uid))
-
-    def pushGetChannels2Queue(self):
-        self.queue.put((self.getChannels, 0))
+        self.check_queue.put(channel_uid)
 
     def pushChannel2Queue(self, channel: dict):
         channel_uid = (channel['channel_id'], channel['channel'])
@@ -235,12 +230,22 @@ class Worker():
     def addChannel2Set(self, channel: dict):
         self.channels.add((channel['channel_id'], channel['channel']))
 
+    def wait(self, left: int, right: int):
+        wait_time = random.randint(left, right)
+        print(f"Sleep {wait_time}s")
+        time.sleep(wait_time)
+
     def autoRun(self):
-        while not self.queue.empty():
-            func, para = self.queue.get()
-            print(f"Call {func} with {para}")
-            func(para)
-            wait_time = random.randint(
-                5, 10) if func == self.checkChannelStatus else random.randint(5, 20)
-            print(f"Sleep {wait_time}s")
-            time.sleep(wait_time)
+        while True:
+            print(f"Call getChannels()")
+            self.getChannels()
+            while not self.join_queue.empty():
+                channel_uid = self.join_queue.get()
+                print(f"Call joinChannel({channel_uid})")
+                self.joinChannel(channel_uid)
+                self.wait(5, 20)
+            while not self.check_queue.empty():
+                channel_uid = self.check_queue.get()
+                print(f"Call checkChannelStatus({channel_uid})")
+                self.checkChannelStatus(channel_uid, True)
+                self.wait(5, 10)

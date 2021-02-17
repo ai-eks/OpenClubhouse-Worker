@@ -134,3 +134,4 @@ dmypy.json
 # OpenClubhouse-Worker
 *_bak.*
 config.py
+token.json
