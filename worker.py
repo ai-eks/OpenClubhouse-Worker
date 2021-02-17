@@ -2,7 +2,7 @@ from pymongo import MongoClient
 # from pymongo.objectid import ObjectId
 
 from ch_helper import ClubHouseHelper
-import queue
+from collections import deque
 import time
 import random
 import json
@@ -29,8 +29,8 @@ class Worker():
         self.db = self.client.clubhouse
         self.chh = clubHouseHelper
         self.channels = set()
-        self.check_queue = queue.Queue()
-        self.join_queue = queue.Queue()
+        self.check_queue = deque()
+        self.join_queue = deque()
         self.token_id = None
         self.token_file = token_file
         self.last_fresh_time = 0
@@ -215,10 +215,10 @@ class Worker():
             }})
 
     def pushUnjoinedChannel2Queue(self, channel_uid: tuple):
-        self.join_queue.put(channel_uid)
+        self.join_queue.append(channel_uid)
 
     def pushJoinedChannel2Queue(self, channel_uid: tuple):
-        self.check_queue.put(channel_uid)
+        self.check_queue.append(channel_uid)
 
     def pushChannel2Queue(self, channel: dict):
         channel_uid = (channel['channel_id'], channel['channel'])
@@ -238,14 +238,19 @@ class Worker():
     def autoRun(self):
         while True:
             print(f"Call getChannels()")
+            # 1. get all channels
             self.getChannels()
-            while not self.join_queue.empty():
-                channel_uid = self.join_queue.get()
+            # 2. join new channels
+            while self.join_queue:
+                channel_uid = self.join_queue.popleft()
                 print(f"Call joinChannel({channel_uid})")
                 self.joinChannel(channel_uid)
                 self.wait(5, 20)
-            while not self.check_queue.empty():
-                channel_uid = self.check_queue.get()
+            # 3. update channels' status
+            check_size = len(self.check_queue)
+            while check_size > 0:
+                channel_uid = self.check_queue.popleft()
+                check_size -= 1
                 print(f"Call checkChannelStatus({channel_uid})")
                 self.checkChannelStatus(channel_uid, True)
-                self.wait(5, 10)
+                self.wait(5, 20)
