@@ -21,3 +21,11 @@ A simple worker for [OpenClubhouse](https://github.com/ai-eks/OpenClubhouse) to 
 
 - <https://github.com/zhuowei/ClubhouseAPI>
   - Regex pattern: replace "(/(.+):\n    (post|get):\n)" with "$1      operationId: $2\n"
+
+## Todo
+
+- [x] large channel write
+- [ ] update strategy
+  - [ ] token update
+  - [x] user count update
+  - [x] channel status update

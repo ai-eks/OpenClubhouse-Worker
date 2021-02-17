@@ -9,8 +9,22 @@ import json
 
 
 class Worker():
-    def __init__(self, clubHouseHelper: ClubHouseHelper, mongo_uri: str, max_retries: int = 5, token_file: str = None):
-        self.max_retries = 5
+    def __init__(
+            self,
+            clubHouseHelper: ClubHouseHelper,
+            mongo_uri: str,
+            token_file: str = None,
+            fresh_interval: int = 3600,
+            max_retries: int = 5,
+            user_limit: int = 500):
+        """
+        Params:
+        - clubHouseHelper: ClubHouseHelper obj.
+        - mongo_uri: full mongoDB connect uri.
+        - token_file: token json file. If it is None, load token from DB.
+        - fresh_time: the timeing to update channel user counts. Unit is second
+        - max_retries: maximum retry attempts for some action. 
+        """
         self.client = MongoClient(mongo_uri)
         self.db = self.client.clubhouse
         self.chh = clubHouseHelper
@@ -18,6 +32,10 @@ class Worker():
         self.queue = queue.Queue()
         self.token_id = None
         self.token_file = token_file
+        self.last_fresh_time = 0
+        self.fresh_interval = fresh_interval
+        self.max_retries = max_retries
+        self.user_limit = user_limit
 
         if self.token_file is not None:
             print("GetTokenFromJsonFile")
@@ -80,28 +98,41 @@ class Worker():
         if cursor:
             self.token_id = cursor.inserted_id
 
-    def endChannel(self, channel_uid):
-        channel_id, channel_str = channel_uid
-        self.db.channels.update_one(
-            {"_id": channel_id}, {"$set": {'success': False}})
-        self.channels.remove(channel_uid)
-        print(f"Channel{channel_uid} is end.")
+    def getChannels(self, retry_times=0):
+        "Query all channels from CH"
+        if retry_times < self.max_retries:
+            try:
+                res = self.chh.getChannels()
+                fresh = False
+                if time.time() - self.last_fresh_time > self.fresh_interval:
+                    fresh = True
+                    self.last_fresh_time = time.time()
+                for channel in res['channels']:
+                    channel_uid = (channel['channel_id'], channel['channel'])
+                    if channel_uid not in self.channels:
+                        print(f"Find a new Channel {channel_uid}")
+                        self.addChannel2Set(channel)
+                        self.pushChannel2Queue(channel)
+                        self.insertChannel2DB(channel)
+                    elif fresh:
+                        print(f"Update a old Channel {channel_uid}")
+                        self.updateChannelInfo2DB(channel)
+                    else:
+                        print(f"Skip a old Channel {channel_uid}")
 
-    def checkChannelStatus(self, channel_uid: tuple, pushintoqueue=True):
-        try:
-            channel_id, channel_str = channel_uid
-            isEnd = self.chh.checkChannelIsEnd(channel_str)
-            if isEnd:
-                self.endChannel(channel_uid)
-                print(f"Room {channel_uid} is ended!")
-            elif pushintoqueue:
-                self.pushJoinedChannel(channel_uid)
-            return isEnd
-        except Exception as e:
-            print(f"Cannot check channel {channel_uid} status.", repr(e))
-            return False
+                self.pushGetChannels2Queue()
+                return True
+            except Exception as e:
+                if 401 <= int(e.args[0]) <= 403:
+                    self.login()
+                    return self.getChannels(retry_times+1)
+                else:
+                    raise Exception(f"Failed to get channels", repr(e))
+        raise Exception(f"Maximum attempts for getChannels")
 
     def joinChannel(self, channel_uid: tuple):
+        "Get token and all users of a specific channel"
+
         if not self.checkChannelStatus(channel_uid, pushintoqueue=False):
             channel_id, channel_str = channel_uid
             # attempts = self.max_retries
@@ -122,11 +153,11 @@ class Worker():
                             "pubnub_heartbeat_interval": res['pubnub_heartbeat_interval'],
                             "pubnub_enable": res['pubnub_enable'],
                             "agora_native_mute": res['agora_native_mute'],
-                            "users": res['users'],
+                            "users": res['users'][:self.user_limit],
                             "joined": True
                         }}
                     )
-                    self.pushJoinedChannel(channel_uid)
+                    self.pushJoinedChannel2Queue(channel_uid)
                 elif "That room is no longer available" in res['error_message']:
                     self.endChannel(channel_uid)
                 else:
@@ -135,69 +166,81 @@ class Worker():
             except Exception as e:
                 print(
                     f"Cannot join channel {channel_uid}.", repr(e))
-                self.pushUnjoinedChannel(channel_uid)
+                self.pushUnjoinedChannel2Queue(channel_uid)
 
-    def insertChannel(self, channel: dict):
-        # channel["_id"] = channel['channel_id']
+    def checkChannelStatus(self, channel_uid: tuple, pushintoqueue=True):
+        "Check if a channel is end"
+        try:
+            channel_id, channel_str = channel_uid
+            isEnd = self.chh.checkChannelIsEnd(channel_str)
+            if isEnd:
+                self.endChannel(channel_uid)
+                print(f"Room {channel_uid} is ended!")
+            elif pushintoqueue:
+                self.pushJoinedChannel2Queue(channel_uid)
+            return isEnd
+        except Exception as e:
+            print(f"Cannot check channel {channel_uid} status.", repr(e))
+            return False
+
+    def endChannel(self, channel_uid):
+        "Mark a channel end"
+        try:
+            channel_id, channel_str = channel_uid
+            self.db.channels.update_one(
+                {"_id": channel_id}, {"$set": {'success': False}})
+            self.channels.remove(channel_uid)
+            print(f"Channel{channel_uid} is end.")
+        except Exception as e:
+            print(f"Cannot end channel {channel_uid} status.", repr(e))
+
+    def getAllAliveChannelsFromDB(self):
+        cursor = self.db.channels.find({"success": True})
+        self.pushGetChannels2Queue()
+        for channel in cursor:
+            self.addChannel2Set(channel)
+            self.pushChannel2Queue(channel)
+
+    def insertChannel2DB(self, channel: dict):
         channel['reviewed'] = False
         channel['_id'] = channel['channel_id']
         channel['success'] = True
         channel['joined'] = False
         self.db.channels.insert_one(channel)
 
-    def getChannels(self, retry_times=0):
-        if retry_times < self.max_retries:
-            try:
-                res = self.chh.getChannels()
-                for channel in res['channels']:
-                    channel_uid = (channel['channel_id'], channel['channel'])
-                    if channel_uid not in self.channels:
-                        self.addChannel(channel)
-                        self.pushChannel(channel)
-                        self.insertChannel(channel)
-                self.pushGetChannels()
-                return True
-            except Exception as e:
-                if 401 <= int(e.args[0]) <= 403:
-                    self.login()
-                    return self.getChannels(retry_times+1)
-                else:
-                    raise Exception(f"Failed to get channels", repr(e))
-        raise Exception(f"Maximum attempts for getChannels")
+    def updateChannelInfo2DB(self, channel: dict):
+        self.db.channels.update_one(
+            {"_id": channel['channel_id']},
+            {"$set": {
+                "num_speakers": channel['num_speakers'],
+                "num_all": channel['num_all'],
+            }})
 
-    def pushUnjoinedChannel(self, channel_uid: tuple):
+    def pushUnjoinedChannel2Queue(self, channel_uid: tuple):
         self.queue.put((self.joinChannel, channel_uid))
 
-    def pushJoinedChannel(self, channel_uid: tuple):
+    def pushJoinedChannel2Queue(self, channel_uid: tuple):
         self.queue.put((self.checkChannelStatus, channel_uid))
 
-    def pushGetChannels(self):
+    def pushGetChannels2Queue(self):
         self.queue.put((self.getChannels, 0))
 
-    def pushChannel(self, channel: dict):
+    def pushChannel2Queue(self, channel: dict):
         channel_uid = (channel['channel_id'], channel['channel'])
         if "token" not in channel:
-            self.pushUnjoinedChannel(channel_uid)
+            self.pushUnjoinedChannel2Queue(channel_uid)
         else:
-            self.pushJoinedChannel(channel_uid)
+            self.pushJoinedChannel2Queue(channel_uid)
 
-    def addChannel(self, channel: dict):
+    def addChannel2Set(self, channel: dict):
         self.channels.add((channel['channel_id'], channel['channel']))
-
-    def getAllAliveChannelsFromDB(self):
-        cursor = self.db.channels.find({"success": True})
-        self.pushGetChannels()
-        for channel in cursor:
-            self.addChannel(channel)
-            self.pushChannel(channel)
 
     def autoRun(self):
         while not self.queue.empty():
             func, para = self.queue.get()
             print(f"Call {func} with {para}")
             func(para)
-            wait_time = random.randint(5, 10)
-            if func == self.checkChannelStatus:
-                wait_time = 1
+            wait_time = random.randint(
+                5, 10) if func == self.checkChannelStatus else random.randint(5, 20)
             print(f"Sleep {wait_time}s")
             time.sleep(wait_time)
