@@ -253,4 +253,4 @@ class Worker():
                 check_size -= 1
                 print(f"Call checkChannelStatus({channel_uid})")
                 self.checkChannelStatus(channel_uid, True)
-                self.wait(5, 20)
+                self.wait(5, 10)
