@@ -241,8 +241,10 @@ class Worker():
             # 1. get all channels
             self.getChannels()
             # 2. join new channels
-            while self.join_queue:
+            join_size = len(self.join_queue)
+            while join_size:
                 channel_uid = self.join_queue.popleft()
+                join_size -= 1
                 print(f"Call joinChannel({channel_uid})")
                 self.joinChannel(channel_uid)
                 self.wait(5, 20)

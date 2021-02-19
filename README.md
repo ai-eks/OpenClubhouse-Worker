@@ -31,3 +31,4 @@ This is a simple worker for [OpenClubhouse](https://github.com/ai-eks/OpenClubho
   - [ ] token update (low priority) - maybe add a probability to join again
   - [x] user count update
   - [x] channel status update
+- [ ] Exception notification
