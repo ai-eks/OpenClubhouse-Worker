@@ -32,3 +32,8 @@ This is a simple worker for [OpenClubhouse](https://github.com/ai-eks/OpenClubho
   - [x] user count update
   - [x] channel status update
 - [ ] Exception notification
+
+## Running in Docker
+```
+docker build -t ochw .
+```
