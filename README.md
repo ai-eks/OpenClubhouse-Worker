@@ -35,6 +35,8 @@ This is a simple worker for [OpenClubhouse](https://github.com/ai-eks/OpenClubho
 
 ## Running in Docker
 ```
+# Ensure mongo is running locally
+# docker run --rm --name my-mongo -it -p 27017:27017 mongo:latest
 docker build -t ochw .
 docker run ochw
 ```

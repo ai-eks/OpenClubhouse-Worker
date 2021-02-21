@@ -1,5 +1,11 @@
 FROM python:3.8
-COPY requirements.txt .
+
+COPY requirements.txt /app/
+WORKDIR /app
+RUN ls ./requirements.txt
 RUN pip install -r requirements.txt
-COPY src/ .
+ENV APP_HOME /app
+WORKDIR $APP_HOME
+COPY src/ ./
+
 CMD [ "python", "./main.py" ]
