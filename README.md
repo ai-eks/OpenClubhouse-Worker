@@ -36,4 +36,5 @@ This is a simple worker for [OpenClubhouse](https://github.com/ai-eks/OpenClubho
 ## Running in Docker
 ```
 docker build -t ochw .
+docker run ochw
 ```
