@@ -124,7 +124,7 @@ class Worker():
             except Exception as e:
                 if 401 <= int(e.args[0]) <= 403:
                     self.login()
-                    return self.getChannels(retry_times+1)
+                    return self.getChannels(retry_times + 1)
                 else:
                     raise Exception(f"Failed to get channels", repr(e))
         raise Exception(f"Maximum attempts for getChannels")

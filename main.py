@@ -1,12 +1,13 @@
 import requests_openapi
-from config import mongo_uri, device_uuid, api_uri, phone, token_file, fresh_interval, user_limit
+
+from config import mongo_uri, device_id, api_uri, phone, token_file, fresh_interval, user_limit
 from worker import Worker
 from ch_helper import ClubHouseHelper
 
 
 def test(worker: Worker = None):
     if worker is None:
-        chh = ClubHouseHelper(phone=phone, url=api_uri, uuid=device_uuid)
+        chh = ClubHouseHelper(phone=phone, url=api_uri, device_id=device_id)
         worker = Worker(clubHouseHelper=chh, mongo_uri=mongo_uri)
     # worker.getTokenFromDB()
     print("token_id:", worker.token_id)
@@ -22,7 +23,7 @@ def test(worker: Worker = None):
 
 
 def main():
-    chh = ClubHouseHelper(phone=phone, url=api_uri, uuid=device_uuid)
+    chh = ClubHouseHelper(phone=phone, url=api_uri, device_id=device_id)
     worker = Worker(
         clubHouseHelper=chh,
         mongo_uri=mongo_uri,
