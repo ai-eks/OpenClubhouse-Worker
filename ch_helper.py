@@ -4,7 +4,7 @@ import requests
 
 
 class ClubHouseHelper():
-    def __init__(self, phone: str, url: str = "./api.yaml", uuid: str = None):
+    def __init__(self, phone: str, url: str = "./api.yaml", device_id: str = None):
         self.client = requests_openapi.Client()
         self.client.load_spec_from_file(url)
         self.phone = phone
@@ -15,7 +15,7 @@ class ClubHouseHelper():
             "CH-Locale": "en_US",
             "CH-AppVersion": "0.1.15",
             "CH-AppBuild": "269",
-            "CH-DeviceId": str(uuid.uuid1()) if uuid is None else uuid,
+            "CH-DeviceId": device_id or str(uuid.uuid1()),
         }
         self.headers = {k: v for k, v in self.base_headers.items()}
 
@@ -62,6 +62,6 @@ class ClubHouseHelper():
 
 
 if __name__ == "__main__":
-    from config import mongo_uri, device_uuid, api_uri, phone
-    chh = ClubHouseHelper(phone=phone, url=api_uri, uuid=device_uuid)
-    
+    from config import mongo_uri, device_id, api_uri, phone
+    chh = ClubHouseHelper(phone=phone, url=api_uri, device_id=device_id)
+
